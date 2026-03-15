@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gra w Karty</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d0d0f;
+            --surface: #141418;
+            --surface2: #1c1c22;
+            --border: #2a2a35;
+            --accent: #c9a84c;
+            --accent2: #e8c97a;
+            --text: #f0ece0;
+            --text-dim: #7a7870;
+            --green: #4caf7d;
+            --red: #e05050;
+            --glow: rgba(201, 168, 76, 0.15);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Noise texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.4;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px 60px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .title-label {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(40px, 8vw, 72px);
+            font-weight: 900;
+            line-height: 1;
+            color: var(--text);
+            letter-spacing: -1px;
+        }
+
+        h1 span {
+            color: var(--accent);
+        }
+
+        .header-line {
+            width: 60px;
+            height: 2px;
+            background: var(--accent);
+            margin: 20px auto 0;
+        }
+
+        /* Game status bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px 28px;
+            margin-bottom: 32px;
+        }
+
+        .status-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-label {
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        .status-value {
+            font-family: 'Playfair Display', serif;
+            font-size: 28px;
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .status-divider {
+            width: 1px;
+            height: 40px;
+            background: var(--border);
+        }
+
+        /* Dice */
+        .dice-zone {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .dice-btn {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 120px;
+            background: var(--surface2);
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dice-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 0%, var(--glow), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .dice-btn:hover::before { opacity: 1; }
+        .dice-btn:hover {
+            border-color: var(--accent);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(201, 168, 76, 0.2);
+        }
+
+        .dice-btn:active { transform: translateY(0) scale(0.96); }
+
+        .dice-icon {
+            font-size: 40px;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .dice-text {
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        .dice-btn.rolling .dice-icon {
+            animation: spin 0.15s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(90deg); }
+            50% { transform: rotate(180deg); }
+            75% { transform: rotate(270deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Roll result pop */
+        .roll-result {
+            display: none;
+            margin-top: 16px;
+        }
+
+        .roll-result.show { display: block; animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        @keyframes popIn {
+            from { transform: scale(0.6); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .roll-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--surface);
+            border: 1px solid var(--accent);
+            border-radius: 40px;
+            padding: 8px 20px;
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            color: var(--accent);
+        }
+
+        /* Task modal overlay */
+        .task-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .task-overlay.show {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .task-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 560px;
+            width: 100%;
+            position: relative;
+            animation: slideUp 0.4s cubic-bezier(0.34, 1.3, 0.64, 1);
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(40px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .task-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            border-radius: 24px 24px 0 0;
+        }
+
+        .task-number-badge {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--bg);
+            font-family: 'Playfair Display', serif;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+        }
+
+        .task-label {
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+        }
+
+        .task-content {
+            font-size: 18px;
+            line-height: 1.7;
+            color: var(--text);
+            margin-bottom: 28px;
+        }
+
+        .task-content br + br { display: none; }
+
+        /* Timer ring */
+        .timer-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            margin-bottom: 28px;
+        }
+
+        .timer-ring {
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+
+        .timer-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .timer-ring circle {
+            fill: none;
+            stroke-width: 4;
+        }
+
+        .timer-track { stroke: var(--border); }
+        .timer-progress {
+            stroke: var(--accent);
+            stroke-linecap: round;
+            stroke-dasharray: 220;
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 1s linear, stroke 0.5s;
+        }
+
+        .timer-number {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Playfair Display', serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        /* Action buttons */
+        .task-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 14px 20px;
+            border: none;
+            border-radius: 12px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+
+        .btn-success {
+            background: var(--green);
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #5dc98f;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(76, 175, 125, 0.3);
+        }
+
+        .btn-fail {
+            background: var(--surface2);
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+
+        .btn-fail:hover {
+            background: rgba(224, 80, 80, 0.15);
+            border-color: var(--red);
+            color: var(--red);
+            transform: translateY(-2px);
+        }
+
+        /* Board */
+        .board-section {
+            margin-top: 40px;
+        }
+
+        .board-title {
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 12px;
+            min-height: 90px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: default;
+        }
+
+        .card-num {
+            position: absolute;
+            top: 8px;
+            left: 10px;
+            font-family: 'Playfair Display', serif;
+            font-size: 14px;
+            color: var(--text-dim);
+            font-weight: 700;
+        }
+
+        .card-preview {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-align: center;
+            line-height: 1.4;
+            display: none;
+            padding-top: 8px;
+        }
+
+        /* Start card */
+        .card-start {
+            background: linear-gradient(135deg, var(--accent) 0%, #a07830 100%);
+            border-color: var(--accent);
+            grid-column: span 1;
+        }
+
+        .card-start .start-label {
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-weight: 900;
+            color: var(--bg);
+            letter-spacing: 2px;
+        }
+
+        /* Active card */
+        .card.active {
+            background: var(--surface2);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent), 0 8px 32px rgba(201, 168, 76, 0.2);
+            transform: scale(1.04);
+            z-index: 2;
+        }
+
+        .card.active .card-num { color: var(--accent); }
+        .card.active .card-preview { display: block; color: var(--text); }
+
+        /* Visited */
+        .card.visited {
+            border-color: rgba(201, 168, 76, 0.3);
+        }
+
+        .card.visited .card-num { color: rgba(201, 168, 76, 0.5); }
+
+        /* End card */
+        .card-end {
+            background: linear-gradient(135deg, #2a4a2a, #1a3a1a);
+            border-color: var(--green);
+        }
+
+        .card-end.active {
+            box-shadow: 0 0 0 1px var(--green), 0 8px 32px rgba(76, 175, 125, 0.25);
+        }
+
+        /* Completion screen */
+        .completion {
+            display: none;
+            text-align: center;
+            padding: 48px 20px;
+            animation: fadeIn 0.6s ease;
+        }
+
+        .completion.show { display: block; }
+
+        .completion-emoji { font-size: 64px; margin-bottom: 20px; }
+        .completion h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 42px;
+            color: var(--accent);
+            margin-bottom: 12px;
+        }
+        .completion p { color: var(--text-dim); font-size: 16px; }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .board { grid-template-columns: repeat(3, 1fr); }
+            .task-actions { grid-template-columns: 1fr; }
+            .status-bar { flex-wrap: wrap; gap: 16px; justify-content: center; }
+            .status-divider { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="title-label">Językowa</div>
+        <h1>Gra w <span>Karty</span></h1>
+        <div class="header-line"></div>
+    </header>
+
+    <!-- Status -->
+    <div class="status-bar">
+        <div class="status-item">
+            <span class="status-label">Pozycja</span>
+            <span class="status-value" id="position">—</span>
+        </div>
+        <div class="status-divider"></div>
+        <div class="status-item">
+            <span class="status-label">Postęp</span>
+            <span class="status-value" id="progress">0/19</span>
+        </div>
+        <div class="status-divider"></div>
+        <div class="status-item">
+            <span class="status-label">Rzuty</span>
+            <span class="status-value" id="rolls">0</span>
+        </div>
+    </div>
+
+    <!-- Dice -->
+    <div class="dice-zone">
+        <button class="dice-btn" id="dice-btn" onclick="rollDice()">
+            <span class="dice-icon" id="dice-icon">⚄</span>
+            <span class="dice-text">Rzuć</span>
+        </button>
+
+        <div class="roll-result" id="roll-result">
+            <span class="roll-badge">
+                <span>Wylosowano</span>
+                <strong id="roll-number" style="font-size:24px;"></strong>
+                <span>pól</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- Completion screen -->
+    <div class="completion" id="completion">
+        <div class="completion-emoji">🏆</div>
+        <h2>Brawo!</h2>
+        <p>Ukończyłeś grę. Gratulacje!</p>
+    </div>
+
+    <!-- Board -->
+    <div class="board-section" id="board-section">
+        <div class="board-title">Plansza gry</div>
+        <div class="board" id="board"></div>
+    </div>
+</div>
+
+<!-- Task overlay -->
+<div class="task-overlay" id="task-overlay">
+    <div class="task-card">
+        <span class="task-number-badge" id="task-badge">Karta 1</span>
+        <div class="task-label">Twoje zadanie</div>
+        <div class="task-content" id="task-content"></div>
+
+        <div class="timer-section">
+            <div class="timer-ring">
+                <svg width="80" height="80" viewBox="0 0 80 80">
+                    <circle class="timer-track" cx="40" cy="40" r="35"/>
+                    <circle class="timer-progress" id="timer-circle" cx="40" cy="40" r="35"/>
+                </svg>
+                <div class="timer-number" id="timer-number">30</div>
+            </div>
+        </div>
+
+        <div class="task-actions">
+            <button class="btn btn-success" onclick="handleResult(true)">✓ Wykonano</button>
+            <button class="btn btn-fail" onclick="handleResult(false)">✗ Nie wykonano</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const tasks = [
+        { id: 1, content: "Podaj 3 przymiotniki na literę <strong>k</strong>:<br>k ________<br>k ________<br>k ________" },
+        { id: 2, content: "Uzupełnij zdanie:<br><em>Osoby, ______________<br>są towarzyscy.</em>" },
+        { id: 3, content: "Wymień <strong>3 wady</strong> człowieka." },
+        { id: 4, content: "Podaj formę liczby mnogiej przymiotników męskoosobowych:<br><em>zarozumiały, towarzyski i otwarty</em>" },
+        { id: 5, content: "Opisz <strong>znaną osobę</strong>, którą lubisz." },
+        { id: 6, content: "Podaj formę liczby mnogiej przymiotników męskoosobowych:<br><em>wesoły, wrażliwy i pewny siebie</em>" },
+        { id: 7, content: "Masz inną opinię o osobie, z którą rozmawiasz. <strong>Co powiesz</strong> w tej sytuacji?" },
+        { id: 8, content: "Uzupełnij zdanie:<br><em>Ludzie, ______________<br>są nieśmiali.</em>" },
+        { id: 9, content: "Podaj <strong>antonim</strong> przymiotnika <em>nieśmiały</em>." },
+        { id: 10, content: "Jakich ludzi lubisz? Opowiedz, jakie muszą mieć <strong>zalety</strong>." },
+        { id: 11, content: "Wyraź <strong>negatywną opinię</strong> o swoim koledze / swojej koleżance." },
+        { id: 12, content: "Podaj 3 przymiotniki na literę <strong>z</strong>:<br>z ________<br>z ________<br>z ________" },
+        { id: 13, content: "Podaj 3 przymiotniki na literę <strong>n</strong>:<br>n ________<br>n ________<br>n ________" },
+        { id: 14, content: "Podaj formę liczby mnogiej przymiotników męskoosobowych:<br><em>mądry, interesujący i głupi</em>" },
+        { id: 15, content: "Jakich ludzi nie lubisz? Opowiedz, jakie mają <strong>wady</strong>." },
+        { id: 16, content: "Opisz <strong>znaną osobę</strong>, której nie lubisz." },
+        { id: 17, content: "Podaj <strong>synonim</strong> przymiotnika <em>arogancki</em>." },
+        { id: 18, content: "Wymień <strong>3 zalety</strong> człowieka." },
+        { id: 19, content: "Wyraź <strong>pozytywną opinię</strong> o swoim koledze / swojej koleżance." },
+    ];
+
+    const DICE_FACES = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+
+    let position = 0;
+    let prevPosition = 0;
+    let rollCount = 0;
+    let timerInterval = null;
+    let visited = new Set([0]);
+
+    function createBoard() {
+        const board = document.getElementById('board');
+        board.innerHTML = '';
+
+        // START
+        const start = document.createElement('div');
+        start.className = 'card card-start active';
+        start.id = 'card-0';
+        start.innerHTML = '<span class="start-label">START</span>';
+        board.appendChild(start);
+
+        // Tasks
+        for (let i = 1; i <= tasks.length; i++) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.id = 'card-' + i;
+
+            const shortText = tasks[i-1].content.replace(/<[^>]+>/g, '').split('\n')[0].substring(0, 30);
+
+            card.innerHTML = `
+                <div class="card-num">${i}</div>
+                <div class="card-preview">${shortText}…</div>
+            `;
+            board.appendChild(card);
+        }
+
+        // END (last task already is 19, so no separate END card needed — but let's mark 19 as end-style)
+        const lastCard = document.getElementById('card-19');
+        if (lastCard) lastCard.classList.add('card-end');
+    }
+
+    function rollDice() {
+        if (position === tasks.length) return;
+
+        const btn = document.getElementById('dice-btn');
+        const icon = document.getElementById('dice-icon');
+        btn.disabled = true;
+        btn.classList.add('rolling');
+
+        document.getElementById('roll-result').classList.remove('show');
+
+        let animCount = 0;
+        const animInterval = setInterval(() => {
+            icon.textContent = DICE_FACES[Math.floor(Math.random() * 6)];
+            animCount++;
+            if (animCount > 10) {
+                clearInterval(animInterval);
+                btn.classList.remove('rolling');
+
+                const roll = Math.floor(Math.random() * 3) + 1;
+                icon.textContent = DICE_FACES[roll - 1];
+
+                prevPosition = position;
+                position = Math.min(tasks.length, position + roll);
+                rollCount++;
+                visited.add(position);
+
+                document.getElementById('roll-number').textContent = roll;
+                document.getElementById('roll-result').classList.add('show');
+                document.getElementById('rolls').textContent = rollCount;
+
+                updatePosition();
+                updateBoard();
+
+                if (position <= tasks.length && position > 0) {
+                    setTimeout(showTask, 600);
+                } else if (position === 0) {
+                    btn.disabled = false;
+                }
+            }
+        }, 80);
+    }
+
+    function updatePosition() {
+        const val = position === 0 ? 'START' : position === tasks.length ? 'KONIEC' : position;
+        document.getElementById('position').textContent = val;
+        document.getElementById('progress').textContent = position + '/' + tasks.length;
+    }
+
+    function updateBoard() {
+        document.querySelectorAll('.card, .card-start').forEach(c => {
+            c.classList.remove('active');
+            const num = parseInt(c.id.replace('card-', ''));
+            if (visited.has(num) && num !== position) c.classList.add('visited');
+        });
+        const active = document.getElementById('card-' + position);
+        if (active) {
+            active.classList.add('active');
+            active.classList.remove('visited');
+            active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    function showTask() {
+        if (position === 0 || position > tasks.length) return;
+
+        const task = tasks[position - 1];
+        document.getElementById('task-badge').textContent = 'Karta ' + position;
+        document.getElementById('task-content').innerHTML = task.content;
+
+        document.getElementById('task-overlay').classList.add('show');
+        startTimer(30);
+    }
+
+    function startTimer(seconds) {
+        clearInterval(timerInterval);
+        const circle = document.getElementById('timer-circle');
+        const numberEl = document.getElementById('timer-number');
+        const circumference = 220;
+        let t = seconds;
+
+        circle.style.stroke = 'var(--accent)';
+        circle.style.strokeDashoffset = '0';
+        numberEl.textContent = t;
+
+        timerInterval = setInterval(() => {
+            t--;
+            numberEl.textContent = t;
+            const progress = (seconds - t) / seconds;
+            circle.style.strokeDashoffset = progress * circumference;
+
+            if (t <= 8) circle.style.stroke = 'var(--red)';
+            else if (t <= 15) circle.style.stroke = '#e0a020';
+
+            if (t <= 0) {
+                clearInterval(timerInterval);
+                setTimeout(() => handleResult(false), 800);
+            }
+        }, 1000);
+    }
+
+    function handleResult(success) {
+        clearInterval(timerInterval);
+        document.getElementById('task-overlay').classList.remove('show');
+
+        if (!success) {
+            position = prevPosition;
+            visited.delete(position + 1 <= tasks.length ? position + 1 : tasks.length);
+            updatePosition();
+            updateBoard();
+            document.getElementById('roll-result').classList.remove('show');
+        }
+
+        if (position === tasks.length) {
+            setTimeout(showCompletion, 400);
+        } else {
+            document.getElementById('dice-btn').disabled = false;
+        }
+    }
+
+    function showCompletion() {
+        document.getElementById('board-section').style.opacity = '0.3';
+        document.getElementById('completion').classList.add('show');
+    }
+
+    createBoard();
+    updatePosition();
+</script>
+</body>
+</html>
